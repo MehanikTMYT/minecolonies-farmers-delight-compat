@@ -1,0 +1,96 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'net.neoforged.moddev' version '2.0.148'
+}
+
+version = "1.0.0-26.1.2"
+group = 'dev.anclyakeks.compat.mcfd'
+
+base {
+    archivesName = 'mcfd_compat'
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+repositories {
+    // Флотские порты MineColonies/Structurize/BlockUI публикуются в mavenLocal (com.ldtteam).
+    mavenLocal()
+}
+
+def forks = file("${projectDir}/../..").absolutePath
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        server {
+            server()
+            programArgument '--nogui'
+            gameDirectory = project.file('run/server')
+        }
+        client {
+            client()
+            gameDirectory = project.file('run')
+        }
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.INFO
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+dependencies {
+    // MineColonies (GPL-3.0): jar из mavenLocal, наше флотское дерево — то же число.
+    implementation "com.ldtteam:minecolonies:${minecolonies_version}"
+    // Client GUI цели миксинов (Structurize WindowSelectRes, BlockUI панели).
+    compileOnly "com.ldtteam:structurize:${structurize_version}"
+    compileOnly "com.ldtteam:blockui:${blockui_version}"
+    // Farmer's Delight 26.1.2 порт (MIT): собранный jar нашего дерева worktrees/farmersdelight-26.1.2.
+    implementation files(findProperty('farmersdelight_jar') ?: "${forks}/worktrees/farmersdelight-26.1.2/build/libs/FarmersDelight-Neoforged-MC26.1.2-FD1.3.4-2.jar")
+}
+
+tasks.withType(ProcessResources).configureEach {
+    var replaceProperties = [
+            minecraft_version_range: minecraft_version_range,
+            neo_version_range      : neo_version_range,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description
+    ]
+    inputs.properties replaceProperties
+
+    filesMatching(['META-INF/neoforge.mods.toml']) {
+        expand replaceProperties
+    }
+}
+
+publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/repo"
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += ['-Xmaxerrs', '5000']
+    options.fork = true
+    options.forkOptions.jvmArgs += ['-Duser.language=en', '-Duser.country=US']
+}
