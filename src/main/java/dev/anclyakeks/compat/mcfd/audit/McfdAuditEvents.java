@@ -6,7 +6,6 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -37,6 +36,7 @@ public final class McfdAuditEvents {
         problems.addAll(McfdCompatAudit.auditParsedRecipes());
         problems.addAll(McfdCompatAudit.auditHooks());
         problems.addAll(McfdCompatAudit.auditRegistries());
+        problems.addAll(McfdCompatAudit.auditLiveCrafting(server.overworld()));
 
         if (problems.isEmpty()) {
             final int total = usedCrafters.values().stream().mapToInt(Integer::intValue).sum();
@@ -49,7 +49,7 @@ public final class McfdAuditEvents {
     @SubscribeEvent
     public static void onRegisterCommands(final RegisterCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("mcfd_audit")
-            .requires(source -> source.hasPermission(2))
+            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
             .executes(context -> runFullAudit(context.getSource()))
         );
     }
@@ -64,14 +64,7 @@ public final class McfdAuditEvents {
         problems.addAll(McfdCompatAudit.auditRegistries());
         problems.addAll(McfdCompatAudit.auditFoodValues());
         problems.addAll(McfdCompatAudit.auditEquivalence());
-
-        final ServerPlayer player = source.getPlayer();
-        if (player == null) {
-            source.sendSuccess(() -> Component.literal("[mcfd_compat] Live recipe crafting needs a player; run /mcfd_audit in-game."),
-                false);
-        } else {
-            problems.addAll(McfdCompatAudit.auditLiveCrafting((ServerLevel) player.level(), player));
-        }
+        problems.addAll(McfdCompatAudit.auditLiveCrafting(source.getLevel()));
 
         final StringBuilder summary = new StringBuilder();
         usedCrafters.forEach((crafter, count) -> summary.append(crafter).append('(').append(count).append(") "));

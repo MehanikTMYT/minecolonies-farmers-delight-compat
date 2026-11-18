@@ -36,6 +36,8 @@ neoForge {
         configureEach {
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.INFO
+            // QA: экспорт transformed-классов (.mixin.out) для проверки применения миксинов.
+            systemProperty 'mixin.debug.export', 'true'
         }
     }
 
@@ -47,11 +49,23 @@ neoForge {
 }
 
 dependencies {
-    // MineColonies (GPL-3.0): jar из mavenLocal, наше флотское дерево — то же число.
-    implementation "com.ldtteam:minecolonies:${minecolonies_version}"
-    // Client GUI цели миксинов (Structurize WindowSelectRes, BlockUI панели).
-    compileOnly "com.ldtteam:structurize:${structurize_version}"
-    compileOnly "com.ldtteam:blockui:${blockui_version}"
+    def m2 = "${System.properties['user.home']}/.m2/repository"
+    // MineColonies (GPL-3.0): локальный jar (mavenLocal / дерево MineColonies),
+    // files() без транзитивности POM — флотский паттерн MineColonies_Compatibility.
+    implementation files(findProperty('minecolonies_jar')
+        ?: "${m2}/com/ldtteam/minecolonies/${minecolonies_version}/minecolonies-${minecolonies_version}.jar")
+    // Рантайм-стек MineColonies: его neoforge.mods.toml требует их как required-моды
+    // (класспас-дискавери FML в dev-ранах moddev — WriteLegacyClasspath).
+    compileOnly files(
+        "${m2}/com/ldtteam/structurize/${structurize_version}/structurize-${structurize_version}.jar",
+        "${m2}/com/ldtteam/blockui/${blockui_version}/blockui-${blockui_version}.jar"
+    )
+    runtimeOnly files(
+        "${m2}/com/ldtteam/structurize/${structurize_version}/structurize-${structurize_version}.jar",
+        "${m2}/com/ldtteam/blockui/${blockui_version}/blockui-${blockui_version}.jar",
+        "${m2}/com/ldtteam/domum-ornamentum/1.0.0-local/domum-ornamentum-1.0.0-local-main.jar",
+        "${m2}/com/ldtteam/multipiston/0.0.1-26.1.2/multipiston-0.0.1-26.1.2.jar"
+    )
     // Farmer's Delight 26.1.2 порт (MIT): собранный jar нашего дерева worktrees/farmersdelight-26.1.2.
     implementation files(findProperty('farmersdelight_jar') ?: "${forks}/worktrees/farmersdelight-26.1.2/build/libs/FarmersDelight-Neoforged-MC26.1.2-FD1.3.4-2.jar")
 }

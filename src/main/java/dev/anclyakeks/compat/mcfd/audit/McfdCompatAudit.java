@@ -19,11 +19,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.storage.loot.LootParams;
-import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.neoforged.neoforge.items.ItemStackHandler;
 import vectorwing.farmersdelight.common.registry.ModBlocks;
 import vectorwing.farmersdelight.common.registry.ModItems;
@@ -149,21 +146,17 @@ public final class McfdCompatAudit {
 
     /**
      * Exercises MineColonies' actual inventory fulfillment code for every parsed
-     * compatibility recipe; finding the JSON files alone is not enough.
+     * compatibility recipe; finding the JSON files alone is not enough. Uses the
+     * entity-free fulfillment overload (empty loot context, like MineColonies'
+     * own console/QA paths), so it also runs on a dedicated server with no
+     * player online; the citizen-only tool-damage branch stays unexercised.
      */
-    public static List<String> auditLiveCrafting(final ServerLevel level, final Entity entity) {
+    public static List<String> auditLiveCrafting(final ServerLevel level) {
         final List<String> problems = new ArrayList<>();
         final List<CustomRecipe> recipes = CustomRecipeManager.getInstance().getAllRecipes().values().stream()
             .flatMap(byId -> byId.values().stream())
             .filter(recipe -> recipe.getRecipeId().getNamespace().equals(McfdCompatMod.MOD_ID))
             .toList();
-
-        final LootParams params = new LootParams.Builder(level)
-            .withParameter(LootContextParams.ORIGIN, entity.position())
-            .withParameter(LootContextParams.THIS_ENTITY, entity)
-            .withParameter(LootContextParams.TOOL, ItemStack.EMPTY)
-            .withLuck(0.0F)
-            .create(com.minecolonies.api.crafting.RecipeStorage.recipeLootParameters);
 
         for (final CustomRecipe recipe : recipes) {
             final IRecipeStorage storage = recipe.getRecipeStorage();
@@ -179,7 +172,7 @@ public final class McfdCompatAudit {
                 inventory.setStackInSlot(slot++, tool.copy());
             }
 
-            final List<ItemStack> outputs = storage.fullfillRecipeAndCopy(params, List.of(inventory), false);
+            final List<ItemStack> outputs = storage.fullfillRecipeAndCopy(level, List.of(inventory), false);
             final boolean crafted = !outputs.isEmpty() && outputs.stream().anyMatch(
                 stack -> ItemStack.isSameItemSameComponents(stack, recipe.getPrimaryOutput()));
             if (!crafted) {
@@ -332,8 +325,10 @@ public final class McfdCompatAudit {
     }
 
     private static boolean hasAppliedHook(final Class<?> owner, final String hookName) {
+        // sponge-mixin 0.17.4 (FML 11) переименовывает применённые хендлеры:
+        // handler$<sort>$<modid>$mcfdCompat$<hook>. Проверяем суффикс.
         for (final var method : owner.getDeclaredMethods()) {
-            if (method.getName().equals(hookName)) {
+            if (method.getName().endsWith(hookName)) {
                 return true;
             }
         }
